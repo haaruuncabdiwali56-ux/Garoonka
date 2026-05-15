@@ -146,7 +146,10 @@ export default function App() {
   const t=T[lang];
   const [stadiums,setStadiums]=useState([]);
   const [users]=useState(USERS);
-  const [currentUser,setCurrentUser]=useState(null);
+  const [currentUser,setCurrentUser]=useState(()=>{
+  try{const u=localStorage.getItem("garoonka_user");return u?JSON.parse(u):null;}
+  catch{return null;}
+});
   const [bookings,setBookings]=useState([]);
   const [screen,setScreen]=useState("home");
   const [selectedStadium,setSelectedStadium]=useState(null);
@@ -188,15 +191,14 @@ export default function App() {
 
   const openStadium=s=>{setSelectedStadium(s);setScreen("detail");};
 
-  const handleLogin=(email,password)=>{
+const handleLogin=(email,password)=>{
     const u=users.find(u=>u.email===email&&u.password===password);
-    if(u){setCurrentUser(u);setScreen("home");showToast(`${t.welcomeBack}, ${u.name.split(" ")[0]}!`);return true;}
+    if(u){setCurrentUser(u);localStorage.setItem("garoonka_user",JSON.stringify(u));setScreen("home");showToast(`${t.welcomeBack}, ${u.name.split(" ")[0]}!`);return true;}
     return false;
   };
   const handleSignup=(name,email,password,phone)=>{
     const u={id:users.length+1,role:"user",name,email,password,phone};
-    setCurrentUser(u);setScreen("home");showToast(`${t.welcomeBack}, ${name.split(" ")[0]}!`);
-  };
+  setCurrentUser(null);localStorage.removeItem("garoonka_user");setScreen("home");
 
   const handleBookSlot=(stadiumId,hourId)=>{
     const s=stadiums.find(s=>s.id===stadiumId);
