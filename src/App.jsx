@@ -5,9 +5,23 @@ const SUPABASE_KEY = "sb_publishable_fm9bHlKBljsuoVZgXUMqBg_t53R8BY0";
 const H = {"Content-Type":"application/json","apikey":SUPABASE_KEY,"Authorization":`Bearer ${SUPABASE_KEY}`};
 
 const db = {
-  async get(table) { const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=*`,{headers:H}); return r.json(); },
-  async post(table,body) { const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}`,{method:"POST",headers:{...H,"Prefer":"return=representation"},body:JSON.stringify(body)}); return r.json(); },
-  async del(table,id) { await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`,{method:"DELETE",headers:H}); },
+  async get(table) {
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=*&order=id.asc`,{headers:H});
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    } catch { return []; }
+  },
+  async post(table,body) {
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}`,{method:"POST",headers:{...H,"Prefer":"return=representation"},body:JSON.stringify(body)});
+      const data = await r.json();
+      return Array.isArray(data) ? data[0] : data;
+    } catch { return null; }
+  },
+  async del(table,id) {
+    try { await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`,{method:"DELETE",headers:H}); } catch {}
+  },
 };
 
 const T={en:{appName:"Garoonka",tagline:"Book Your Stadium in Garoowe",search:"Search stadiums...",sortNearest:"Nearest",sortFurthest:"Furthest",allDistricts:"All Districts",perHour:"/hr",call:"Call",whatsapp:"WhatsApp",schedule:"Schedule",free:"Free",booked:"Booked",bookNow:"Book Now",back:"Back",login:"Login",logout:"Logout",signup:"Sign Up",email:"Email",password:"Password",name:"Full Name",phone:"Phone Number",myBookings:"My Bookings",adminPanel:"Admin Panel",ownerDashboard:"Owner Dashboard",manageSchedule:"Manage Schedule",markFree:"Mark Free",markBooked:"Mark Booked",removeStadium:"Remove",users:"Users",owners:"Owners",stadiums:"Stadiums",noBookings:"No bookings yet.",welcomeBack:"Welcome back",loginError:"Invalid email or password.",languageToggle:"Somali",contactAdmin:"WhatsApp Admin",hours:"Hour",confirmBook:"Confirm booking for",cancel:"Cancel",confirm:"Confirm",bookingSuccess:"Booking confirmed!",artificialTurf:"Artificial Turf",naturalGrass:"Natural Grass",concrete:"Concrete",loading:"Loading stadiums...",addStadium:"Add Stadium",stadiumName:"Stadium Name",district:"District",price:"Price per hour ($)",surface:"Surface"},so:{appName:"Garoonka",tagline:"Ka Buuxi Garoonkaaga Garoowe",search:"Raadi garoon...",sortNearest:"Ugu Dhow",sortFurthest:"Ugu Fog",allDistricts:"Dhammaan Degmooyinka",perHour:"/saac",call:"Wac",whatsapp:"WhatsApp",schedule:"Jadwal",free:"Xor",booked:"Buuxan",bookNow:"Buuxi Hadda",back:"Dib",login:"Gal",logout:"Bax",signup:"Isdiiwaangeliso",email:"Iimaylka",password:"Furaha Sirta",name:"Magaca Buuxa",phone:"Lambarka Telefoonka",myBookings:"Buuxintaydii",adminPanel:"Xarunta Maamulka",ownerDashboard:"Xarunta Mulkiilaha",manageSchedule:"Maaree Jadwalka",markFree:"Calaamadi Xor",markBooked:"Calaamadi Buuxan",removeStadium:"Ka Saar",users:"Isticmaalayaasha",owners:"Mulkiilayaasha",stadiums:"Garoomaanaha",noBookings:"Buuxin ma jirto.",welcomeBack:"Ku soo dhawoow",loginError:"Iimaylka ama furaha sirta waa khalad.",languageToggle:"English",contactAdmin:"WhatsApp Admin",hours:"Saacad",confirmBook:"Xaqiiji buuxinta",cancel:"Jooji",confirm:"Xaqiiji",bookingSuccess:"Buuxintii waa la xaqiijiyay!",artificialTurf:"Caws Macmal ah",naturalGrass:"Caws Dabiici ah",concrete:"Dhagax Dhis",loading:"Waa la raraa...",addStadium:"Ku Dar Garoon",stadiumName:"Magaca Garoonka",district:"Degmada",price:"Qiimaha Saacadda ($)",surface:"Xadhkaha"}};
@@ -25,6 +39,10 @@ const USERS=[
 
 const EMOJIS=["⚽","🏟️","🏆","🌟","🎯","🏅"];
 const COLORS=[["#1a472a","#2d6a4f"],["#1b4332","#40916c"],["#023e8a","#0077b6"],["#7b2d00","#c84b00"],["#4a0072","#7b1fa2"],["#004d40","#00796b"]];
+
+const saveUser = (u) => { try { sessionStorage.setItem("gu", JSON.stringify(u)); } catch {} };
+const loadUser = () => { try { const u = sessionStorage.getItem("gu"); return u ? JSON.parse(u) : null; } catch { return null; } };
+const clearUser = () => { try { sessionStorage.removeItem("gu"); } catch {} };
 
 const css=`
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
@@ -146,10 +164,7 @@ export default function App() {
   const t=T[lang];
   const [stadiums,setStadiums]=useState([]);
   const [users]=useState(USERS);
-  const [currentUser,setCurrentUser]=useState(()=>{
-  try{const u=localStorage.getItem("garoonka_user");return u?JSON.parse(u):null;}
-  catch{return null;}
-});
+  const [currentUser,setCurrentUser]=useState(loadUser);
   const [bookings,setBookings]=useState([]);
   const [screen,setScreen]=useState("home");
   const [selectedStadium,setSelectedStadium]=useState(null);
@@ -164,9 +179,10 @@ export default function App() {
   const [showAddForm,setShowAddForm]=useState(false);
   const [newStadium,setNewStadium]=useState({name:"",district:"",price:"",surface:"artificialTurf",phone:"252905066221"});
 
-  useEffect(()=>{
+  const loadStadiums = () => {
+    setLoading(true);
     db.get("stadiums").then(data=>{
-      if(data&&Array.isArray(data)&&data.length>0){
+      if(data && data.length>0){
         setStadiums(data.map((s,i)=>({
           ...s,
           colors:[s.color1||COLORS[i%COLORS.length][0],s.color2||COLORS[i%COLORS.length][1]],
@@ -176,10 +192,12 @@ export default function App() {
         })));
       }
       setLoading(false);
-    }).catch(()=>setLoading(false));
-    db.get("bookings").then(data=>{
-      if(data&&Array.isArray(data))setBookings(data);
-    }).catch(()=>{});
+    });
+  };
+
+  useEffect(()=>{
+    loadStadiums();
+    db.get("bookings").then(data=>{ if(data) setBookings(data); });
   },[]);
 
   const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(null),2500);};
@@ -191,14 +209,18 @@ export default function App() {
 
   const openStadium=s=>{setSelectedStadium(s);setScreen("detail");};
 
-const handleLogin=(email,password)=>{
+  const handleLogin=(email,password)=>{
     const u=users.find(u=>u.email===email&&u.password===password);
-    if(u){setCurrentUser(u);localStorage.setItem("garoonka_user",JSON.stringify(u));setScreen("home");showToast(`${t.welcomeBack}, ${u.name.split(" ")[0]}!`);return true;}
+    if(u){setCurrentUser(u);saveUser(u);setScreen("home");showToast(`${t.welcomeBack}, ${u.name.split(" ")[0]}!`);return true;}
     return false;
   };
+
+  const handleLogout=()=>{setCurrentUser(null);clearUser();setScreen("home");};
+
   const handleSignup=(name,email,password,phone)=>{
-    const u={id:users.length+1,role:"user",name,email,password,phone};
-  setCurrentUser(null);localStorage.removeItem("garoonka_user");setScreen("home");
+    const u={id:Date.now(),role:"user",name,email,password,phone};
+    setCurrentUser(u);saveUser(u);setScreen("home");showToast(`${t.welcomeBack}, ${name.split(" ")[0]}!`);
+  };
 
   const handleBookSlot=(stadiumId,hourId)=>{
     const s=stadiums.find(s=>s.id===stadiumId);
@@ -209,9 +231,9 @@ const handleLogin=(email,password)=>{
   const confirmBooking=()=>{
     if(!currentUser){setScreen("auth");setBookingSlot(null);return;}
     const booking={stadium_id:bookingSlot.stadiumId,user_name:currentUser.name,user_phone:currentUser.phone,hour_label:bookingSlot.hourLabel,booked_date:new Date().toLocaleDateString()};
-    db.post("bookings",booking).catch(()=>{});
+    db.post("bookings",booking);
     setStadiums(prev=>prev.map(s=>s.id===bookingSlot.stadiumId?{...s,schedule:{...s.schedule,[bookingSlot.hourId]:"booked"}}:s));
-    setBookings(prev=>[...prev,{...booking,id:Date.now(),userId:currentUser.id}]);
+    setBookings(prev=>[...prev,{...booking,id:Date.now()}]);
     setSelectedStadium(prev=>prev?{...prev,schedule:{...prev.schedule,[bookingSlot.hourId]:"booked"}}:prev);
     setBookingSlot(null);showToast(t.bookingSuccess);
   };
@@ -223,22 +245,24 @@ const handleLogin=(email,password)=>{
   };
 
   const removeStadium=id=>{
-    db.del("stadiums",id).catch(()=>{});
+    db.del("stadiums",id);
     setStadiums(prev=>prev.filter(s=>s.id!==id));
     showToast("Stadium removed!");
   };
 
-  const addStadium=()=>{
+  const addStadium=async()=>{
     if(!newStadium.name||!newStadium.district||!newStadium.price)return;
     const idx=stadiums.length%COLORS.length;
     const s={name:newStadium.name,district:newStadium.district,price:parseInt(newStadium.price),surface:newStadium.surface,phone:newStadium.phone,emoji:EMOJIS[idx],color1:COLORS[idx][0],color2:COLORS[idx][1],owner_id:2};
-    db.post("stadiums",s).then(data=>{
-      const created=Array.isArray(data)?data[0]:data;
-      setStadiums(prev=>[...prev,{...created,colors:[s.color1,s.color2],schedule:initSched(),ownerId:2}]);
-    }).catch(()=>{});
+    const created = await db.post("stadiums",s);
+    if(created && created.id){
+      setStadiums(prev=>[...prev,{...created,colors:[s.color1,s.color2],schedule:initSched(),emoji:s.emoji,ownerId:2}]);
+      showToast("Stadium added! ✅");
+    } else {
+      showToast("Error adding stadium");
+    }
     setShowAddForm(false);
     setNewStadium({name:"",district:"",price:"",surface:"artificialTurf",phone:"252905066221"});
-    showToast("Stadium added!");
   };
 
   const whatsapp=phone=>window.open(`https://wa.me/${phone}`,"_blank");
@@ -259,7 +283,7 @@ const handleLogin=(email,password)=>{
             <div className="header-actions">
               <button className="btn-sm" onClick={()=>setLang(lang==="en"?"so":"en")}>{t.languageToggle}</button>
               {currentUser
-                ?<button className="btn-sm active" onClick={()=>{setCurrentUser(null);setScreen("home");}}>{t.logout}</button>
+                ?<button className="btn-sm active" onClick={handleLogout}>{t.logout}</button>
                 :<button className="btn-sm" onClick={()=>setScreen("auth")}>{t.login}</button>}
             </div>
           </div>
@@ -338,12 +362,12 @@ const handleLogin=(email,password)=>{
 
           {screen==="bookings"&&<div className="panel">
             <div className="panel-title">📋 {t.myBookings}</div>
-            {bookings.filter(b=>b.userId===currentUser?.id||b.user_name===currentUser?.name).length===0
+            {bookings.filter(b=>b.user_name===currentUser?.name).length===0
               ?<div className="empty-state"><div className="es-icon">📋</div><p>{t.noBookings}</p></div>
-              :bookings.filter(b=>b.userId===currentUser?.id||b.user_name===currentUser?.name).map((b,i)=>(
+              :bookings.filter(b=>b.user_name===currentUser?.name).map((b,i)=>(
                 <div key={i} className="booking-card">
-                  <div className="booking-stadium">{b.stadiumName||b.stadium_id}</div>
-                  <div className="booking-detail">🕐 {b.hour||b.hour_label} · 📅 {b.date||b.booked_date}</div>
+                  <div className="booking-stadium">🏟️ Stadium #{b.stadium_id}</div>
+                  <div className="booking-detail">🕐 {b.hour_label} · 📅 {b.booked_date}</div>
                   <span className="booking-status">✓ {t.booked}</span>
                 </div>
               ))}
@@ -354,7 +378,7 @@ const handleLogin=(email,password)=>{
             <div className="tab-row">
               <button className={`tab${adminTab==="stadiums"?" active":""}`} onClick={()=>setAdminTab("stadiums")}>🏟️ {t.stadiums}</button>
               <button className={`tab${adminTab==="users"?" active":""}`} onClick={()=>setAdminTab("users")}>👤 {t.users}</button>
-              <button className={`tab${adminTab==="bookings"?" active":""}`} onClick={()=>setAdminTab("bookings")}>📋 {t.myBookings}</button>
+              <button className={`tab${adminTab==="bookings"?" active":""}`} onClick={()=>setAdminTab("bookings")}>📋 Bookings</button>
             </div>
             {adminTab==="stadiums"&&<>
               <button className="btn btn-green btn-full" style={{marginBottom:16}} onClick={()=>setShowAddForm(!showAddForm)}>➕ {t.addStadium}</button>
@@ -384,12 +408,12 @@ const handleLogin=(email,password)=>{
               </div>)}
             </>}
             {adminTab==="users"&&users.filter(u=>u.role==="user").map(u=><div key={u.id} className="list-item">
-              <div className="list-item-info"><div className="list-item-name">{u.name} <span className="role-badge role-user">user</span></div><div className="list-item-sub">{u.email} · {u.phone}</div></div>
+              <div className="list-item-info"><div className="list-item-name">{u.name}<span className="role-badge role-user">user</span></div><div className="list-item-sub">{u.email} · {u.phone}</div></div>
             </div>)}
             {adminTab==="bookings"&&(bookings.length===0
               ?<div className="empty-state"><div className="es-icon">📋</div><p>{t.noBookings}</p></div>
               :bookings.map((b,i)=><div key={i} className="booking-card">
-                <div className="booking-stadium">{b.stadiumName||`Stadium #${b.stadium_id}`}</div>
+                <div className="booking-stadium">🏟️ Stadium #{b.stadium_id}</div>
                 <div className="booking-detail">👤 {b.user_name} · 🕐 {b.hour_label} · 📅 {b.booked_date}</div>
                 <span className="booking-status">✓ {t.booked}</span>
               </div>)
